@@ -156,7 +156,7 @@ The operator is assumed **not** in Cursor chat—they only see ntfy pushes and r
 
 | Situation | Use `notify` |
 |-----------|----------------|
-| Starting an **ntfy session** (e.g. “start ntfy session”) | Yes — then stay in ntfy mode until they reply `end session` on ntfy |
+| Starting an **ntfy session** (e.g. “start ntfy session”) | Yes — then stay in ntfy mode until they close the loop on ntfy (`thanks`, `ok`, `published`, `done`, or `end session`) |
 | Question, approval, blocker, error, or “done” for the operator | Yes — do not put these only in chat |
 | After they reply on ntfy | Yes again for the next step or result |
 | Timeout (no reply within poll window) | Call `notify` again with a short reminder (do not guess secrets or approvals) |
@@ -168,7 +168,7 @@ Every `notify` call blocks until you reply or the poll window expires.
 1. You: start session on ntfy → agent notifies you and waits.
 2. You: give the task on ntfy → agent works (silent in chat for operator updates).
 3. Agent: notifies you with status or outcome → you reply on ntfy.
-4. Repeat until you reply `end session` on ntfy.
+4. Repeat until you close the loop on ntfy (e.g. `thanks`, `published`, `done`, or `end session`).
 
 Add a Cursor user rule if you want extra guardrails, e.g. *“During an ntfy session I am not at the desk; only ntfy counts.”*
 
