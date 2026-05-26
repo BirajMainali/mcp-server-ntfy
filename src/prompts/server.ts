@@ -4,7 +4,7 @@ import {
 } from "./operator-channel.js";
 
 export const serverDescription =
-  "Reach the human operator on ntfy (they are not in Cursor chat) and wait for their reply.";
+  "ntfy channel for the human operator—notify and wait for their reply.";
 
 export const serverInstructions = [
   ...operatorChannelRules,

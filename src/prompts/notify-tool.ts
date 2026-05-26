@@ -1,18 +1,14 @@
 import { z } from "zod";
-import { operatorChannelRules } from "./operator-channel.js";
 
 export const notifyToolDescription = [
-  "Send the operator a push on ntfy and wait for their reply. They do not see Cursor chat.",
-  "",
-  ...operatorChannelRules,
-  "",
-  "Keep the push short. Say what you need them to reply.",
-].join("\n");
+  "Push the operator on ntfy and block until they reply on the topic.",
+  "Follow server instructions. Keep the message short and say what they should reply.",
+].join(" ");
 
 export const notifyInputSchema = {
   message: z
     .string()
     .min(1)
-    .describe("Operator-facing text; include what they should reply"),
+    .describe("Plain-text push body"),
   title: z.string().optional().describe("Push title (optional)"),
 } as const;
