@@ -2,7 +2,7 @@
 
 **Let your AI agent reach you on your phone—so you can leave the chat.**
 
-An [MCP](https://modelcontextprotocol.io/) server that sends [ntfy](https://ntfy.sh) push notifications to the human operator. The agent can fire-and-forget alerts or block until you reply on the same topic—without you watching the session in Cursor.
+An [MCP](https://modelcontextprotocol.io/) server that sends [ntfy](https://ntfy.sh) push notifications to the human operator and **waits for your reply** on the same topic—without you watching the session in Cursor.
 
 ---
 
@@ -13,28 +13,28 @@ Long-running agent work creates a bad choice:
 - **Stay in the chat** — watch progress, context-switch constantly, lose focus.
 - **Walk away** — miss failures, blockers, and “done” signals until you come back and dig through history.
 
-Email and Slack are heavy for a quick “deploy finished” or “approve this?” Mobile push is instant, but agents do not have a standard way to use it. ntfy is simple HTTP; this server bridges **MCP ↔ ntfy** so the model can notify and optionally wait for your answer.
+Email and Slack are heavy for a quick “deploy finished” or “approve this?” Mobile push is instant, but agents do not have a standard way to use it. ntfy is simple HTTP; this server bridges **MCP ↔ ntfy** so the model can reach you and read your answer back.
 
 ---
 
 ## What it does
 
-| Mode | Behavior |
-|------|----------|
-| **`notification`** | Push to your device and continue. For outcomes, failures, or FYIs that need no reply. |
-| **`waiting_for_response`** | Push a question, then poll the topic until you post a reply in the ntfy app (or the wait window expires). |
+Every `notify` call:
 
-The agent gets structured tool results (`sent`, `replied`, `timeout`). Server instructions and few-shot examples guide *when* to notify vs. when to stay quiet.
+1. Pushes a message to your device.
+2. Polls the topic until you reply in the ntfy app (or the wait window expires).
+
+The agent gets `replied` with your text, or `timeout` as a tool error. Server and tool instructions steer the agent to treat **ntfy as the only operator channel** during an ntfy session (not Cursor chat).
 
 ---
 
 ## Features
 
 - **Stdio MCP** — works with Cursor and other MCP clients out of the box
-- **One `notify` tool** — `message`, optional `title`, required `type`
+- **One `notify` tool** — `message`, optional `title`; always waits for a reply
 - **Configurable ntfy server** — public `ntfy.sh` or self-hosted
-- **Poll window** — `NTFY_POLL_WINDOW_MS` (default 10 minutes) for wait mode
-- **Opinionated prompts** — steers the agent away from spam; includes few-shot examples for each mode
+- **Poll window** — `NTFY_POLL_WINDOW_MS` (default 10 minutes) before timeout
+- **Opinionated prompts** — steers the agent away from spam; few-shot examples for reaching the operator
 - **TypeScript** — small, functional layout (`ntfy` client, `notify` service, separated prompts)
 
 ---
@@ -44,12 +44,13 @@ The agent gets structured tool results (`sent`, `replied`, `timeout`). Server in
 ```text
 Agent (Cursor)  →  MCP notify tool  →  POST ntfy topic  →  your phone (ntfy app)
                               │
-                              └─ waiting_for_response: GET …/json?poll=1&since=<id> every 3s
+                              └─ GET …/json?poll=1&since=<unix-time> every 3s until you reply
+                                 (only treats messages newer than the outbound message as a reply)
 ```
 
 1. You subscribe to a **topic** in the ntfy app (same name as `NTFY_TOPIC`).
 2. The agent calls `notify` with a message (and optional title).
-3. ntfy delivers the push. For **wait mode**, you reply by sending a new message to that topic; the server returns your text to the agent.
+3. ntfy delivers the push. You reply by sending a new message to that topic; the server returns your text to the agent.
 
 ---
 
@@ -61,6 +62,16 @@ Agent (Cursor)  →  MCP notify tool  →  POST ntfy topic  →  your phone (ntf
 ---
 
 ## Quick start
+
+### From npm
+
+```bash
+npx -y mcp-server-ntfy
+```
+
+See [Cursor configuration](#cursor-configuration) below.
+
+### From source (contributors)
 
 ```bash
 git clone git@github.com:BirajMainali/mcp-server-ntfy.git
@@ -86,8 +97,8 @@ Add to **Cursor Settings → MCP** (or `.cursor/mcp.json`):
 {
   "mcpServers": {
     "ntfy": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-server-ntfy/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "mcp-server-ntfy"],
       "env": {
         "NTFY_SERVER_URL": "https://ntfy.sh",
         "NTFY_TOPIC": "your-secret-topic-name"
@@ -97,17 +108,7 @@ Add to **Cursor Settings → MCP** (or `.cursor/mcp.json`):
 }
 ```
 
-Restart MCP / Cursor after changing config or rebuilding.
-
-For local development without building:
-
-```json
-{
-  "command": "npx",
-  "args": ["tsx", "/absolute/path/to/mcp-server-ntfy/src/index.ts"],
-  "env": { "...": "..." }
-}
-```
+Restart MCP / Cursor after changing config.
 
 ---
 
@@ -117,7 +118,7 @@ For local development without building:
 |----------|----------|---------|-------------|
 | `NTFY_SERVER_URL` | Yes | — | ntfy base URL (e.g. `https://ntfy.sh` or `http://localhost:8080`) |
 | `NTFY_TOPIC` | Yes | — | Topic name; agent and you must use the same channel |
-| `NTFY_POLL_WINDOW_MS` | No | `600000` (10 min) | Max wait in `waiting_for_response` before timeout |
+| `NTFY_POLL_WINDOW_MS` | No | `600000` (10 min) | Max wait for your reply before timeout |
 
 See [.env.example](.env.example).
 
@@ -127,38 +128,49 @@ See [.env.example](.env.example).
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `message` | Yes | Body of the push (plain text) |
+| `message` | Yes | Body of the push (plain text); say what you need them to reply |
 | `title` | No | Notification title |
-| `type` | Yes | `notification` or `waiting_for_response` |
 
 **Example results**
 
 ```json
-{ "status": "sent", "type": "notification", "messageId": "…" }
+{ "status": "replied", "messageId": "…", "reply": "production" }
 ```
 
 ```json
-{ "status": "replied", "type": "waiting_for_response", "messageId": "…", "reply": "production" }
+{
+  "status": "timeout",
+  "messageId": "…",
+  "pollWindowMs": 600000,
+  "guidance": "No reply yet. Call notify again with a short reminder. Do not guess secrets or approvals."
+}
 ```
 
-```json
-{ "status": "timeout", "type": "waiting_for_response", "messageId": "…", "pollWindowMs": 600000 }
-```
-
-(timeout is returned as a tool error)
+(timeout is returned as a tool error; the agent is instructed to call `notify` again)
 
 ---
 
 ## When should the agent use it?
 
-Built-in guidance tells the model to notify on:
+The operator is assumed **not** in Cursor chat—they only see ntfy pushes and replies on the topic.
 
-- Terminal outcomes (success / failure of unattended work)
-- Hard blockers (needs approval, secret, or decision)
-- Material failures
-- Explicit “ping me when done” requests
+| Situation | Use `notify` |
+|-----------|----------------|
+| Starting an **ntfy session** (e.g. “start ntfy session”) | Yes — then stay in ntfy mode until they reply `end session` on ntfy |
+| Question, approval, blocker, error, or “done” for the operator | Yes — do not put these only in chat |
+| After they reply on ntfy | Yes again for the next step or result |
+| Timeout (no reply within poll window) | Call `notify` again with a short reminder (do not guess secrets or approvals) |
 
-And **not** for routine progress, self-answerable questions, or noise you did not ask for.
+Every `notify` call blocks until you reply or the poll window expires.
+
+**Ntfy session flow (what the prompts teach the agent):**
+
+1. You: start session on ntfy → agent notifies you and waits.
+2. You: give the task on ntfy → agent works (silent in chat for operator updates).
+3. Agent: notifies you with status or outcome → you reply on ntfy.
+4. Repeat until you reply `end session` on ntfy.
+
+Add a Cursor user rule if you want extra guardrails, e.g. *“During an ntfy session I am not at the desk; only ntfy counts.”*
 
 ---
 
@@ -172,10 +184,30 @@ And **not** for routine progress, self-answerable questions, or noise you did no
 
 ## Development
 
+Clone the repo, then:
+
 ```bash
-npm run dev    # tsx src/index.ts (stdio — for MCP, not interactive)
+npm install
+npm run dev    # tsx src/index.ts (stdio)
 npm run build  # compile to dist/
-npm start      # node dist/index.js
+npm test
+```
+
+To run the built server from a checkout in MCP, point `args` at your local `dist/index.js`:
+
+```json
+{
+  "mcpServers": {
+    "ntfy": {
+      "command": "node",
+      "args": ["/path/to/mcp-server-ntfy/dist/index.js"],
+      "env": {
+        "NTFY_SERVER_URL": "https://ntfy.sh",
+        "NTFY_TOPIC": "your-secret-topic-name"
+      }
+    }
+  }
+}
 ```
 
 ### Project layout
@@ -197,8 +229,8 @@ src/
 
 - No ntfy auth headers (Basic / bearer) for protected topics
 - No per-call topic override (single topic from env)
-- No automated test suite yet
-- `waiting_for_response` blocks the tool call for the poll window (by design)
+- Run `npm test` for reply-detection unit tests
+- Every `notify` blocks the tool call until you reply or the poll window ends (by design)
 
 ---
 

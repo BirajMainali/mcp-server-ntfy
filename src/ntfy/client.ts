@@ -1,6 +1,7 @@
 import { POLL_INTERVAL_MS } from "../constants.js";
 import { sleep } from "../lib/sleep.js";
 import type { NtfyConfig, NtfyPublishedMessage } from "../types.js";
+import { findReply, type PollAnchor } from "./reply.js";
 
 const topicPath = (config: NtfyConfig): string =>
   `${config.serverUrl}/${encodeURIComponent(config.topic)}`;
@@ -11,22 +12,6 @@ const parseJsonLines = (body: string): NtfyPublishedMessage[] =>
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => JSON.parse(line) as NtfyPublishedMessage);
-
-const extractReplyText = (event: NtfyPublishedMessage): string | null => {
-  const text = event.message?.trim() || event.title?.trim();
-  return text ?? null;
-};
-
-const findReply = (
-  events: NtfyPublishedMessage[],
-  sinceMessageId: string,
-): string | null => {
-  const replyEvent = events.find(
-    (event) => event.event === "message" && event.id !== sinceMessageId,
-  );
-
-  return replyEvent ? extractReplyText(replyEvent) : null;
-};
 
 const assertOk = async (response: Response, action: string): Promise<void> => {
   if (!response.ok) {
@@ -62,25 +47,27 @@ export const publish = async (
 
 const pollOnce = async (
   config: NtfyConfig,
-  sinceMessageId: string,
+  anchor: PollAnchor,
 ): Promise<string | null> => {
-  const url = `${topicPath(config)}/json?poll=1&since=${encodeURIComponent(sinceMessageId)}`;
+  // Use publish time, not message id: if the id is not in cache yet, ntfy returns
+  // all cached messages and we would mis-detect an old message as the reply.
+  const url = `${topicPath(config)}/json?poll=1&since=${encodeURIComponent(String(anchor.time))}`;
   const response = await fetch(url);
 
   await assertOk(response, "poll");
 
-  return findReply(parseJsonLines(await response.text()), sinceMessageId);
+  return findReply(parseJsonLines(await response.text()), anchor);
 };
 
 export const pollUntilReply = async (
   config: NtfyConfig,
-  sinceMessageId: string,
+  anchor: PollAnchor,
   windowMs: number,
 ): Promise<string | null> => {
   const deadline = Date.now() + windowMs;
 
   while (Date.now() < deadline) {
-    const reply = await pollOnce(config, sinceMessageId);
+    const reply = await pollOnce(config, anchor);
     if (reply !== null) {
       return reply;
     }

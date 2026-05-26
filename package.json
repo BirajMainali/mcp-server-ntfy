@@ -1,21 +1,45 @@
 {
   "name": "mcp-server-ntfy",
-  "version": "1.0.0",
-  "description": "ntfy MCP server—outbound alerts so the operator can leave the session; signal outcomes, blockers, and requested checkpoints only",
+  "version": "1.1.2",
+  "description": "ntfy MCP server—reach the operator on their phone and wait for a reply before continuing",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "mcp-server-ntfy": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    ".env.example"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx --test src/**/*.test.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ntfy",
+    "notifications",
+    "cursor",
+    "push"
+  ],
+  "author": "Biraj Mainali",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BirajMainali/mcp-server-ntfy.git"
+  },
+  "homepage": "https://github.com/BirajMainali/mcp-server-ntfy#readme",
+  "bugs": {
+    "url": "https://github.com/BirajMainali/mcp-server-ntfy/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.2.1",

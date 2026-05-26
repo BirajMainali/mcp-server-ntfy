@@ -1,5 +1,3 @@
-export type NotifyType = "notification" | "waiting_for_response";
-
 export type NtfyConfig = {
   serverUrl: string;
   topic: string;
@@ -9,7 +7,6 @@ export type NtfyConfig = {
 export type NotifyInput = {
   message: string;
   title?: string | undefined;
-  type: NotifyType;
 };
 
 export type NtfyPublishedMessage = {
@@ -21,24 +18,17 @@ export type NtfyPublishedMessage = {
   title?: string;
 };
 
-export type NotifySent = {
-  status: "sent";
-  type: "notification";
-  messageId: string;
-};
-
 export type NotifyReplied = {
   status: "replied";
-  type: "waiting_for_response";
   messageId: string;
   reply: string;
 };
 
 export type NotifyTimedOut = {
   status: "timeout";
-  type: "waiting_for_response";
   messageId: string;
   pollWindowMs: number;
+  guidance: string;
 };
 
-export type NotifyOutcome = NotifySent | NotifyReplied | NotifyTimedOut;
+export type NotifyOutcome = NotifyReplied | NotifyTimedOut;
